@@ -1,3 +1,9 @@
+---
+domain: ml-prompt-injection-killer
+skills: []
+schemas: []
+---
+
 # ML Prompt Injection Killer
 
 **Status:** P0 TODO (follow-up to sidebar security fix PR)

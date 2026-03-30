@@ -1,3 +1,9 @@
+---
+domain: acknowledgements
+skills: []
+schemas: []
+---
+
 # Acknowledgements
 
 /cso v2 was informed by research across the security audit landscape. Credits to:

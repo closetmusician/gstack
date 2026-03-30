@@ -1,3 +1,9 @@
+---
+domain: browser
+skills: []
+schemas: []
+---
+
 # Browser — technical details
 
 This document covers the command reference and internals of gstack's headless browser.

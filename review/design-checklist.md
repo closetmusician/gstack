@@ -1,3 +1,9 @@
+---
+domain: design-checklist
+skills: []
+schemas: []
+---
+
 # Design Review Checklist (Lite)
 
 > **Subset of DESIGN_METHODOLOGY** — when adding items here, also update `generateDesignMethodology()` in `scripts/gen-skill-docs.ts`, and vice versa.

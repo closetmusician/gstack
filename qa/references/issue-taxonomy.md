@@ -1,3 +1,9 @@
+---
+domain: issue-taxonomy
+skills: []
+schemas: []
+---
+
 # QA Issue Taxonomy
 
 ## Severity Levels

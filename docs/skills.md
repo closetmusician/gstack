@@ -1,3 +1,9 @@
+---
+domain: skills
+skills: []
+schemas: []
+---
+
 # Skill Deep Dives
 
 Detailed guides for every gstack skill — philosophy, workflow, and examples.

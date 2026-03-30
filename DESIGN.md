@@ -1,3 +1,9 @@
+---
+domain: design
+skills: []
+schemas: []
+---
+
 # Design System — gstack
 
 ## Product Context

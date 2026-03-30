@@ -1,3 +1,9 @@
+---
+domain: design-shotgun
+skills: []
+schemas: []
+---
+
 # Design: Design Shotgun — Browser-to-Agent Feedback Loop
 
 Generated on 2026-03-27

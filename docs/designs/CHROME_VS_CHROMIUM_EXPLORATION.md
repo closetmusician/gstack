@@ -1,3 +1,9 @@
+---
+domain: chrome-vs-chromium-exploration
+skills: []
+schemas: []
+---
+
 # Chrome vs Chromium: Why We Use Playwright's Bundled Chromium
 
 ## The Original Vision

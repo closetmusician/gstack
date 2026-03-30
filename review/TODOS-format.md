@@ -1,3 +1,9 @@
+---
+domain: todos-format
+skills: []
+schemas: []
+---
+
 # TODOS.md Format Reference
 
 Shared reference for the canonical TODOS.md format. Referenced by `/ship` (Step 5.5) and `/plan-ceo-review` (TODOS.md updates section) to ensure consistent TODO item structure.

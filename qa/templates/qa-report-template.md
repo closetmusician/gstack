@@ -1,3 +1,9 @@
+---
+domain: qa-report-template
+skills: []
+schemas: []
+---
+
 # QA Report: {APP_NAME}
 
 | Field | Value |

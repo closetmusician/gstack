@@ -1,3 +1,9 @@
+---
+domain: conductor-session-api
+skills: []
+schemas: []
+---
+
 # Conductor Session Streaming API Proposal
 
 ## Problem

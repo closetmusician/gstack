@@ -1,3 +1,9 @@
+---
+domain: agents
+skills: []
+schemas: []
+---
+
 # gstack — AI Engineering Workflow
 
 gstack is a collection of SKILL.md files that give AI agents structured roles for

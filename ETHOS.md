@@ -1,3 +1,9 @@
+---
+domain: ethos
+skills: []
+schemas: []
+---
+
 # gstack Builder Ethos
 
 These are the principles that shape how gstack thinks, recommends, and builds.

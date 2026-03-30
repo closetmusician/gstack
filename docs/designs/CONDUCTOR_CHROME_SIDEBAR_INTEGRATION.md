@@ -1,3 +1,9 @@
+---
+domain: conductor-chrome-sidebar-integration
+skills: []
+schemas: []
+---
+
 # Chrome Sidebar + Conductor: What We Need
 
 ## What we're building

@@ -1,3 +1,9 @@
+---
+domain: checklist
+skills: []
+schemas: []
+---
+
 # Pre-Landing Review Checklist
 
 ## Instructions

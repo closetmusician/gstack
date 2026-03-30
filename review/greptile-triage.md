@@ -1,3 +1,9 @@
+---
+domain: greptile-triage
+skills: []
+schemas: []
+---
+
 # Greptile Comment Triage
 
 Shared reference for fetching, filtering, and classifying Greptile review comments on GitHub PRs. Both `/review` (Step 2.5) and `/ship` (Step 3.75) reference this document.
