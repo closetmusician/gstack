@@ -546,13 +546,256 @@ Before reviewing anything, answer these questions:
    - How will users download or install it (GitHub Releases, package manager, container registry)?
    If the plan defers distribution, flag it explicitly in the "NOT in scope" section — don't let it silently drop.
 
-If the complexity check triggers (8+ files or 2+ new classes/services), proactively recommend scope reduction via AskUserQuestion — explain what's overbuilt, propose a minimal version that achieves the core goal, and ask whether to reduce or proceed as-is. If the complexity check does not trigger, present your Step 0 findings and proceed directly to Section 1.
+If the complexity check triggers (8+ files or 2+ new classes/services), proactively recommend scope reduction via AskUserQuestion — explain what's overbuilt, propose a minimal version that achieves the core goal, and ask whether to reduce or proceed as-is. If the complexity check does not trigger, present your Step 0 findings and proceed directly to Section 0.5.
 
-Always work through the full interactive review: one section at a time (Architecture → Code Quality → Tests → Performance) with at most 8 top issues per section.
+Always work through the full interactive review: one section at a time (PRD Traceability → Architecture → Code Quality → Tests → Performance) with at most 8 top issues per section.
 
 **Critical: Once the user accepts or rejects a scope reduction recommendation, commit fully.** Do not re-argue for smaller scope during later review sections. Do not silently reduce scope or skip planned components.
 
 ## Review Sections (after scope is agreed)
+
+### 0.5 PRD Traceability Matrix
+
+**Purpose:** Systematically verify 1:1 mapping between every PRD requirement/acceptance criterion and the engineering design doc's tasks/acceptance criteria. The design doc must PROVE faithful translation. Gaps are P0 blockers.
+
+**Execution model:** 5 fresh **sonnet-level subagents** in a 3-phase pipeline with maximum parallelism. Each agent gets clean context (no review conversation, no architectural rationale). Each reads from disk and writes to disk — no reliance on conversation memory. The pipeline survives context compaction because all intermediate state is on disk.
+
+```
+TRACEABILITY AUDIT PIPELINE
+════════════════════════════
+
+Phase 1: Extraction (2 agents in parallel)
+  ├─ Agent A (sonnet): PRD Extraction     → {TRACE_DIR}/prd-extract.md
+  ├─ Agent B (sonnet): Eng Doc Extraction  → {TRACE_DIR}/eng-extract.md
+  ↓ (both complete, re-read from disk)
+
+Phase 2: Tracing (2 agents in parallel)
+  ├─ Agent C (sonnet): Forward Trace (PRD→Eng)  → {TRACE_DIR}/forward-trace.md
+  ├─ Agent D (sonnet): Reverse Trace (Eng→PRD)  → {TRACE_DIR}/reverse-trace.md
+  ↓ (both complete, re-read from disk)
+
+Phase 3: Synthesis (1 agent)
+  └─ Agent E (sonnet): Gap Analysis + Verdict   → {TRACE_DIR}/traceability-matrix.md
+```
+
+**Working directory:** Set `{TRACE_DIR}` based on context:
+- When called from eng-planning: `docs/.eng-planning/traceability/`
+- When called standalone (plan-eng-review): create a temp dir, clean up after
+
+```bash
+mkdir -p {TRACE_DIR}
+```
+
+---
+
+#### Phase 1: Extraction (parallel — launch both in a single message)
+
+**Agent A — PRD Extractor** (`model: "sonnet"`, `subagent_type: "general-purpose"`):
+
+> You are a PRD requirements extractor. Your ONLY job: read the PRD and produce a complete, numbered inventory of every requirement and acceptance criterion. Miss nothing. Add nothing.
+>
+> Read the PRD at: `{PRD_PATH}`
+>
+> Extract and number every:
+> - **Requirement** (P0/P1/P2), each as `PRD-R-NNN` with priority, full text verbatim, and parent section
+> - **Acceptance criterion**, each as `PRD-AC-NNN` linked to parent `PRD-R-NNN`, full text verbatim
+> - **User story or use case**, each as `PRD-US-NNN`
+> - **Constraint or non-functional requirement**, each as `PRD-C-NNN`
+> - **Success metric** with testable threshold, each as `PRD-SM-NNN`
+> - **Non-goal** (things explicitly out of scope), each as `PRD-NG-NNN`
+>
+> For multi-clause acceptance criteria, number each clause separately: `PRD-AC-003a`, `PRD-AC-003b`, etc.
+>
+> Write the complete extraction to: `{TRACE_DIR}/prd-extract.md`
+>
+> Format: numbered list with ID, type, priority (if applicable), verbatim text, and parent reference. Include a summary count at the end: "Total: N requirements, N acceptance criteria, N user stories, N constraints, N success metrics, N non-goals."
+>
+> Do NOT interpret, summarize, or paraphrase. Copy the PRD text VERBATIM for each item. Your output is a forensic inventory, not a summary.
+
+**Agent B — Eng Doc Extractor** (`model: "sonnet"`, `subagent_type: "general-purpose"`):
+
+> You are an engineering design doc extractor. Your ONLY job: read the engineering design docs and API contracts, and produce a complete, numbered inventory of every task, acceptance criterion, and deliverable. Miss nothing. Add nothing.
+>
+> Read these files completely:
+> - Engineering Design Doc(s): `{ARTIFACT_PATHS}`
+> - API Contract(s): `{CONTRACT_PATHS}` (if any)
+>
+> Extract and number every:
+> - **Task** (T-XXX) with priority, objective, full requirements text, and depends-on
+> - **Engineering acceptance criterion**, each as `ENG-AC-NNN` linked to parent task, full text verbatim
+> - **API endpoint** from contracts, each as `ENG-API-NNN` with method, path, and purpose
+> - **Data model/schema**, each as `ENG-DM-NNN` with field names and types
+> - **Non-goal or out-of-scope item**, each as `ENG-NG-NNN`
+>
+> Write the complete extraction to: `{TRACE_DIR}/eng-extract.md`
+>
+> Format: numbered list with ID, type, priority, verbatim text, and parent reference. Include a summary count at the end: "Total: N tasks, N acceptance criteria, N API endpoints, N data models, N non-goals."
+>
+> Do NOT interpret, summarize, or paraphrase. Copy the design doc text VERBATIM for each item.
+
+**After Phase 1:** Wait for both agents to complete. Verify both files exist on disk. Do NOT proceed if either agent failed — re-spawn the failed agent.
+
+---
+
+#### Phase 2: Tracing (parallel — launch both in a single message)
+
+**Before spawning:** Re-read `{TRACE_DIR}/prd-extract.md` and `{TRACE_DIR}/eng-extract.md` from disk. Pass their contents into the agent prompts. This ensures Phase 2 agents have the exact extraction output, not a compressed memory of it.
+
+**Agent C — Forward Tracer** (`model: "sonnet"`, `subagent_type: "general-purpose"`):
+
+> You are an adversarial forward traceability auditor. You verify that EVERY product requirement has been faithfully translated into engineering work. You are skeptical by default — the engineering doc is GUILTY of dropping requirements until proven otherwise.
+>
+> Do not give the benefit of the doubt. Do not infer intent. If the PRD says "error message within 2 seconds" and the eng AC says "show error message" — that is DILUTED (threshold dropped). If the PRD has a P0 requirement and no eng task covers it — that is DROPPED, full stop.
+>
+> ## Inputs (on disk)
+> - PRD extraction: `{TRACE_DIR}/prd-extract.md`
+> - Eng extraction: `{TRACE_DIR}/eng-extract.md`
+>
+> ## Task
+> For EACH item in the PRD extraction (`PRD-R-*`, `PRD-AC-*`, `PRD-US-*`, `PRD-C-*`, `PRD-SM-*`):
+> 1. Find the corresponding eng item(s) — match by semantic content, not by ID
+> 2. Verify the eng version captures the FULL intent — not a subset, not a paraphrase that loses specifics
+> 3. Check priority preservation: P0 PRD requirement must map to P0 eng task (not downgraded)
+> 4. Check detail preservation: thresholds, boundary values, error conditions, edge cases all carried through
+> 5. Check completeness: if a PRD AC has multiple clauses (a, b, c), ALL must appear in eng ACs
+> 6. For `PRD-NG-*` items: verify they do NOT appear as eng tasks (non-goals must stay out of scope)
+>
+> Classify each mapping:
+> - **MATCH**: Eng item faithfully captures full PRD intent
+> - **DROPPED**: No eng item corresponds to this PRD item
+> - **DILUTED**: Eng item covers the topic but loses specifics (thresholds, edge cases, conditions)
+> - **DOWNGRADED**: PRD priority not preserved (P0→P1, P1→P2)
+> - **SPLIT_RISK**: PRD item split across multiple eng tasks — detail may fall through cracks
+> - **REINTERPRETED**: Eng version changes meaning or narrows intent
+>
+> Write results to: `{TRACE_DIR}/forward-trace.md`
+>
+> Format:
+> ```
+> FORWARD TRACE (PRD → Engineering)
+> | PRD ID     | PRD Text (≤50 chars)          | Eng Item(s)  | Status         | Detail |
+> |------------|-------------------------------|--------------|----------------|--------|
+> ```
+> For every non-MATCH row, include a "Gap Detail" paragraph: PRD text verbatim, eng text verbatim (or "ABSENT"), and why this is a gap.
+>
+> End with: "Forward trace complete. Total: N items traced. MATCH: N. Gaps: N (DROPPED: N, DILUTED: N, DOWNGRADED: N, SPLIT_RISK: N, REINTERPRETED: N)."
+
+**Agent D — Reverse Tracer** (`model: "sonnet"`, `subagent_type: "general-purpose"`):
+
+> You are an adversarial reverse traceability auditor. You verify that EVERY piece of engineering work traces back to an approved product requirement. Unauthorized scope creep wastes build time and introduces untested surface area.
+>
+> ## Inputs (on disk)
+> - PRD extraction: `{TRACE_DIR}/prd-extract.md`
+> - Eng extraction: `{TRACE_DIR}/eng-extract.md`
+>
+> ## Task
+> For EACH item in the Eng extraction (`ENG-AC-*`, tasks, `ENG-API-*`, `ENG-DM-*`):
+> 1. Find the PRD item it traces back to — match by semantic content
+> 2. Classify:
+>    - **TRACED**: Clear PRD backing exists
+>    - **SCOPE_CREEP**: No PRD backing AND no explicit "engineering necessity" justification in the design doc
+>    - **ENG_NECESSITY**: No direct PRD backing but the design doc explicitly justifies it as required infrastructure (e.g., migrations, auth middleware, test fixtures)
+>
+> Also check: do any `PRD-NG-*` non-goals appear as eng tasks? If so, flag as **NON_GOAL_VIOLATION**.
+>
+> Write results to: `{TRACE_DIR}/reverse-trace.md`
+>
+> Format:
+> ```
+> REVERSE TRACE (Engineering → PRD)
+> | Eng Item   | Eng Text (≤50 chars)         | PRD Source   | Status          | Detail |
+> |------------|------------------------------|--------------|-----------------|--------|
+> ```
+> For every non-TRACED row, include a "Detail" paragraph explaining what the eng item does and why no PRD backing was found.
+>
+> End with: "Reverse trace complete. Total: N items traced. TRACED: N. SCOPE_CREEP: N. ENG_NECESSITY: N. NON_GOAL_VIOLATION: N."
+
+**After Phase 2:** Wait for both agents to complete. Verify both files exist on disk. Do NOT proceed if either agent failed — re-spawn the failed agent.
+
+---
+
+#### Phase 3: Synthesis (sequential — depends on Phase 2 output)
+
+**Before spawning:** Re-read all four intermediate files from disk:
+- `{TRACE_DIR}/prd-extract.md`
+- `{TRACE_DIR}/eng-extract.md`
+- `{TRACE_DIR}/forward-trace.md`
+- `{TRACE_DIR}/reverse-trace.md`
+
+Pass all four into the agent prompt to ensure the synthesis agent has the complete picture.
+
+**Agent E — Synthesis & Verdict** (`model: "sonnet"`, `subagent_type: "general-purpose"`):
+
+> You are the final traceability synthesis agent. You combine forward and reverse trace results into a single traceability matrix with a pass/fail verdict.
+>
+> ## Inputs (on disk)
+> - PRD extraction: `{TRACE_DIR}/prd-extract.md`
+> - Eng extraction: `{TRACE_DIR}/eng-extract.md`
+> - Forward trace: `{TRACE_DIR}/forward-trace.md`
+> - Reverse trace: `{TRACE_DIR}/reverse-trace.md`
+>
+> ## Task
+> 1. **Merge traces** — Combine forward and reverse findings into a unified matrix
+> 2. **Deduplicate** — If the same gap appears in both traces, merge into one finding
+> 3. **Cross-validate** — Check for contradictions between forward and reverse traces (e.g., forward says MATCH but reverse says SCOPE_CREEP for the same mapping). Flag contradictions.
+> 4. **Produce the final matrix and verdict**
+>
+> ## Output Format
+>
+> Write to: `{TRACE_DIR}/traceability-matrix.md`
+>
+> ```
+> PRD TRACEABILITY MATRIX
+> ═══════════════════════
+>
+> FORWARD TRACE (PRD → Engineering):
+> | PRD ID     | Requirement (≤40 chars)       | Eng Task(s) | Eng AC(s)   | Status         | Notes |
+> |------------|-------------------------------|-------------|-------------|----------------|-------|
+> [all rows from forward trace]
+>
+> REVERSE TRACE (Engineering → PRD):
+> | Eng Task   | Objective (≤40 chars)         | PRD Source  | Status       | Notes |
+> |------------|-------------------------------|-------------|--------------|-------|
+> [all rows from reverse trace]
+>
+> CROSS-VALIDATION:
+> [any contradictions between forward and reverse traces, or "No contradictions found."]
+>
+> GAP DETAIL:
+> For each gap, one paragraph: what the PRD says verbatim, what the eng doc says (or doesn't), and why this is a gap. Group by gap type.
+>
+> SUMMARY:
+> - Total PRD items: N | Fully matched: N (X%) | Gaps: N
+>   - DROPPED: N | DILUTED: N | DOWNGRADED: N
+>   - SPLIT_RISK: N | REINTERPRETED: N
+> - Total eng items: N | Traced to PRD: N | SCOPE_CREEP: N | ENG_NECESSITY: N | NON_GOAL_VIOLATION: N
+>
+> VERDICT: PASS (100% forward trace, 0 gaps) | FAIL (N gaps requiring resolution)
+> ```
+
+**After Phase 3:** Read `{TRACE_DIR}/traceability-matrix.md` from disk. This is the final output.
+
+---
+
+#### Cleanup & Gap Resolution
+
+**Intermediate file cleanup:** Keep all files in `{TRACE_DIR}/` until the traceability check is fully resolved. Delete the directory only when the parent workflow completes (eng-planning Step 12, or end of plan-eng-review session). The intermediate files are the audit trail — they prove exactly what each agent saw and concluded.
+
+**After synthesis agent returns:**
+
+1. **If VERDICT is PASS:** Report "PRD Traceability: 100% match confirmed (5-agent audit)" and proceed to Section 1.
+
+2. **If VERDICT is FAIL:** Each gap becomes a finding in this review section.
+   - **DROPPED / DILUTED / DOWNGRADED / REINTERPRETED / NON_GOAL_VIOLATION** → `[P0] (confidence: 10/10)` — factual gaps verified by independent agents against source text
+   - **SPLIT_RISK** → `[P1] (confidence: 7/10)` — may be fine if cross-references are solid
+   - **SCOPE_CREEP** → `[P1] (confidence: 8/10)` — may be legitimate engineering necessity
+
+**STOP.** For each gap found, call AskUserQuestion individually. One gap per call. Quote the PRD text vs. the eng text (or absence), state the gap type, and offer resolution options:
+- A) Add/strengthen the requirement in the eng design doc
+- B) This is intentionally deferred — add to NOT IN SCOPE with justification
+- C) The PRD is wrong/outdated — flag for PRD update
+
+Do NOT proceed to Architecture Review until all traceability gaps are resolved or explicitly deferred.
 
 ## Prior Learnings
 
@@ -1069,6 +1312,7 @@ Format: `Lane A: step1 → step2 (sequential, shared models/)` / `Lane B: step3 
 ### Completion summary
 At the end of the review, fill in and display this summary so the user can see all findings at a glance:
 - Step 0: Scope Challenge — ___ (scope accepted as-is / scope reduced per recommendation)
+- PRD Traceability: ___ (PASS — 100% match / FAIL — N gaps resolved, N deferred)
 - Architecture Review: ___ issues found
 - Code Quality Review: ___ issues found
 - Test Review: diagram produced, ___ gaps identified
