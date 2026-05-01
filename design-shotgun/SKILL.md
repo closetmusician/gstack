@@ -391,6 +391,40 @@ Then write a `## GSTACK REVIEW REPORT` section to the end of the plan file:
 file you are allowed to edit in plan mode. The plan file review report is part of the
 plan's living status.
 
+## THEME RESOLUTION
+
+```bash
+_DESIGN_FILE="DESIGN.md"
+_THEME_DIR=~/.claude/skills/design-shotgun/themes
+if [ -d "$_THEME_DIR" ]; then
+  _THEMES=$(ls "$_THEME_DIR"/DESIGN-*.md 2>/dev/null | wc -l | tr -d ' ')
+  echo "THEMES_AVAILABLE: $_THEMES"
+  for f in "$_THEME_DIR"/DESIGN-*.md; do
+    [ -f "$f" ] && echo "  $(basename "$f")"
+  done
+else
+  echo "THEMES_AVAILABLE: 0"
+fi
+```
+
+### Theme Selection
+
+If the user's invocation includes `--theme <name>` (e.g., `--theme atlas-dark`), set
+`_DESIGN_FILE` to `$_THEME_DIR/DESIGN-<name>.md`. If the file doesn't exist, tell the
+user and list available themes.
+
+If no `--theme` flag and THEMES_AVAILABLE > 1, use AskUserQuestion:
+> "Multiple design themes available. Which should I use for this session?"
+
+Present each DESIGN-*.md as an option (extract the theme name from the filename).
+Include "DESIGN.md (project default)" as a fallback option.
+
+If no `--theme` flag and THEMES_AVAILABLE = 0, use `DESIGN.md` (current behavior).
+If THEMES_AVAILABLE = 1, use that single theme automatically.
+
+After resolving, announce: "Using design system: [theme name]"
+Set `_DESIGN_FILE` to the resolved absolute path.
+
 # /design-shotgun: Visual Design Exploration
 
 You are a design brainstorming partner. Generate multiple AI design variants, open them
@@ -490,7 +524,7 @@ When run standalone, gather context to build a proper design brief.
 **Auto-gather first:**
 
 ```bash
-cat DESIGN.md 2>/dev/null | head -80 || echo "NO_DESIGN_MD"
+cat "$_DESIGN_FILE" 2>/dev/null | head -80 || echo "NO_DESIGN_MD"
 ```
 
 ```bash
@@ -502,7 +536,7 @@ setopt +o nomatch 2>/dev/null || true
 ls ~/.gstack/projects/$SLUG/*office-hours* 2>/dev/null | head -5
 ```
 
-If DESIGN.md exists, tell the user: "I'll follow your design system in DESIGN.md by
+If a design file was resolved, tell the user: "I'll follow the design system in $_DESIGN_FILE by
 default. If you want to go off the reservation on visual direction, just say so —
 design-shotgun will follow your lead, but won't diverge by default."
 
@@ -517,7 +551,7 @@ like how this looks," screenshot the current page and use `$D evolve` instead of
 `$D variants` to generate improvement variants from the existing design.
 
 **AskUserQuestion with pre-filled context:** Pre-fill what you inferred from the codebase,
-DESIGN.md, and office-hours output. Then ask for what's missing. Frame as ONE question
+the resolved design file, and office-hours output. Then ask for what's missing. Frame as ONE question
 covering all gaps:
 
 > "Here's what I know: [pre-filled context]. I'm missing [gaps].
@@ -808,4 +842,4 @@ If standalone, offer next steps via AskUserQuestion:
 3. **Confirm feedback before saving.** Always summarize what you understood and verify.
 4. **Taste memory is automatic.** Prior approved designs inform new generations by default.
 5. **Two rounds max on context gathering.** Don't over-interrogate. Proceed with assumptions.
-6. **DESIGN.md is the default constraint.** Unless the user says otherwise.
+6. **The resolved design file ($_DESIGN_FILE) is the default constraint.** Unless the user says otherwise.

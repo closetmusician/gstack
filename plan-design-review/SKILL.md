@@ -410,6 +410,40 @@ Then write a `## GSTACK REVIEW REPORT` section to the end of the plan file:
 file you are allowed to edit in plan mode. The plan file review report is part of the
 plan's living status.
 
+## THEME RESOLUTION
+
+```bash
+_DESIGN_FILE="DESIGN.md"
+_THEME_DIR=~/.claude/skills/design-shotgun/themes
+if [ -d "$_THEME_DIR" ]; then
+  _THEMES=$(ls "$_THEME_DIR"/DESIGN-*.md 2>/dev/null | wc -l | tr -d ' ')
+  echo "THEMES_AVAILABLE: $_THEMES"
+  for f in "$_THEME_DIR"/DESIGN-*.md; do
+    [ -f "$f" ] && echo "  $(basename "$f")"
+  done
+else
+  echo "THEMES_AVAILABLE: 0"
+fi
+```
+
+### Theme Selection
+
+If the user's invocation includes `--theme <name>` (e.g., `--theme atlas-dark`), set
+`_DESIGN_FILE` to `$_THEME_DIR/DESIGN-<name>.md`. If the file doesn't exist, tell the
+user and list available themes.
+
+If no `--theme` flag and THEMES_AVAILABLE > 1, use AskUserQuestion:
+> "Multiple design themes available. Which should I use for this review?"
+
+Present each DESIGN-*.md as an option (extract the theme name from the filename).
+Include "DESIGN.md (project default)" as a fallback option.
+
+If no `--theme` flag and THEMES_AVAILABLE = 0, use `DESIGN.md` (current behavior).
+If THEMES_AVAILABLE = 1, use that single theme automatically.
+
+After resolving, announce: "Using design system: [theme name]"
+Set `_DESIGN_FILE` to the resolved absolute path.
+
 ## Step 0: Detect platform and base branch
 
 First, detect the git hosting platform from the remote URL:
@@ -538,12 +572,12 @@ git diff <base> --stat
 Then read:
 - The plan file (current plan or branch diff)
 - CLAUDE.md — project conventions
-- DESIGN.md — if it exists, ALL design decisions calibrate against it
+- $_DESIGN_FILE — if it exists, ALL design decisions calibrate against it
 - TODOS.md — any design-related TODOs this plan touches
 
 Map:
 * What is the UI scope of this plan? (pages, components, interactions)
-* Does a DESIGN.md exist? If not, flag as a gap.
+* Does a design file exist ($_DESIGN_FILE)? If not, flag as a gap.
 * Are there existing design patterns in the codebase to align with?
 * What prior design reviews exist? (check reviews.jsonl)
 
@@ -607,9 +641,9 @@ Rate the plan's overall design completeness 0-10.
 
 Explain what a 10 looks like for THIS plan.
 
-### 0B. DESIGN.md Status
-- If DESIGN.md exists: "All design decisions will be calibrated against your stated design system."
-- If no DESIGN.md: "No design system found. Recommend running /design-consultation first. Proceeding with universal design principles."
+### 0B. Design System Status
+- If $_DESIGN_FILE exists: "All design decisions will be calibrated against your stated design system."
+- If no design file found: "No design system found. Recommend running /design-consultation first. Proceeding with universal design principles."
 
 ### 0C. Existing Design Leverage
 What existing UI patterns, components, or design decisions in the codebase should this plan reuse? Don't reinvent what already works.
@@ -661,10 +695,10 @@ fewer variants and benefits from sequential control. Note: /design-shotgun uses
 parallel Agent subagents for variant generation, which works at Tier 2+ (15+ RPM).
 The sequential constraint here is specific to plan-design-review's inline pattern.
 
-For each UI screen/section in scope, construct a design brief from the plan's description (and DESIGN.md if present) and generate variants:
+For each UI screen/section in scope, construct a design brief from the plan's description (and $_DESIGN_FILE if present) and generate variants:
 
 ```bash
-$D variants --brief "<description assembled from plan + DESIGN.md constraints>" --count 3 --output-dir "$_DESIGN_DIR/"
+$D variants --brief "<description assembled from plan + $_DESIGN_FILE constraints>" --count 3 --output-dir "$_DESIGN_DIR/"
 ```
 
 After generation, run a cross-model quality check on each variant:
@@ -1038,8 +1072,8 @@ If visual mockups were generated in Step 0.5, evaluate them against the AI slop 
 **STOP.** AskUserQuestion once per issue. Do NOT batch. Recommend + WHY.
 
 ### Pass 5: Design System Alignment
-Rate 0-10: Does the plan align with DESIGN.md?
-FIX TO 10: If DESIGN.md exists, annotate with specific tokens/components. If no DESIGN.md, flag the gap and recommend `/design-consultation`.
+Rate 0-10: Does the plan align with the resolved design system ($_DESIGN_FILE)?
+FIX TO 10: If $_DESIGN_FILE exists, annotate with specific tokens/components. If no design file, flag the gap and recommend `/design-consultation`.
 Flag any new component — does it fit the existing vocabulary?
 **STOP.** AskUserQuestion once per issue. Do NOT batch. Recommend + WHY.
 

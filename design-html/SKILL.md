@@ -394,6 +394,40 @@ Then write a `## GSTACK REVIEW REPORT` section to the end of the plan file:
 file you are allowed to edit in plan mode. The plan file review report is part of the
 plan's living status.
 
+## THEME RESOLUTION
+
+```bash
+_DESIGN_FILE="DESIGN.md"
+_THEME_DIR=~/.claude/skills/design-shotgun/themes
+if [ -d "$_THEME_DIR" ]; then
+  _THEMES=$(ls "$_THEME_DIR"/DESIGN-*.md 2>/dev/null | wc -l | tr -d ' ')
+  echo "THEMES_AVAILABLE: $_THEMES"
+  for f in "$_THEME_DIR"/DESIGN-*.md; do
+    [ -f "$f" ] && echo "  $(basename "$f")"
+  done
+else
+  echo "THEMES_AVAILABLE: 0"
+fi
+```
+
+### Theme Selection
+
+If the user's invocation includes `--theme <name>` (e.g., `--theme atlas-dark`), set
+`_DESIGN_FILE` to `$_THEME_DIR/DESIGN-<name>.md`. If the file doesn't exist, tell the
+user and list available themes.
+
+If no `--theme` flag and THEMES_AVAILABLE > 1, use AskUserQuestion:
+> "Multiple design themes available. Which should I use for this session?"
+
+Present each DESIGN-*.md as an option (extract the theme name from the filename).
+Include "DESIGN.md (project default)" as a fallback option.
+
+If no `--theme` flag and THEMES_AVAILABLE = 0, use `DESIGN.md` (current behavior).
+If THEMES_AVAILABLE = 1, use that single theme automatically.
+
+After resolving, announce: "Using design system: [theme name]"
+Set `_DESIGN_FILE` to the resolved absolute path.
+
 # /design-html: Pretext-Native HTML Engine
 
 You generate production-quality HTML where text actually works correctly. Not CSS
@@ -496,7 +530,7 @@ ls -t ~/.gstack/projects/$SLUG/designs/*/approved.json 2>/dev/null | head -1
 
 2. If found, read it. Extract: approved variant PNG path, user feedback, screen name.
 
-3. Read `DESIGN.md` if it exists in the repo root. These tokens take priority for
+3. Read the resolved design file (`$_DESIGN_FILE`) if it exists. These tokens take priority for
    system-level values (fonts, brand colors, spacing scale).
 
 4. **Evolve mode:** Check for prior output:
@@ -533,7 +567,7 @@ This returns colors, typography, layout structure, and component inventory via G
 2. If `$D` is not available, read the approved PNG inline using the Read tool.
    Describe the visual layout, colors, typography, and component structure yourself.
 
-3. Read `DESIGN.md` tokens. These override any extracted values for system-level
+3. Read `$_DESIGN_FILE` tokens. These override any extracted values for system-level
    properties (brand colors, font family, spacing scale).
 
 4. Output an "Implementation spec" summary: colors (hex), fonts (family + weights),
@@ -620,7 +654,7 @@ For framework output, save to:
 
 **Always include in vanilla HTML:**
 - Pretext source (inlined or CDN, see above)
-- CSS custom properties for design tokens from DESIGN.md / Step 1 extraction
+- CSS custom properties for design tokens from $_DESIGN_FILE / Step 1 extraction
 - Google Fonts via `<link>` tags + `document.fonts.ready` gate before first `prepare()`
 - Semantic HTML5 (`<header>`, `<nav>`, `<main>`, `<section>`, `<footer>`)
 - Responsive behavior via Pretext relayout (not just media queries)
@@ -889,7 +923,7 @@ Maximum 10 iterations. If the user hasn't said "done" after 10, use AskUserQuest
 
 ### Design Token Extraction
 
-If no `DESIGN.md` exists in the repo root, offer to create one from the generated HTML:
+If no design file was resolved (neither $_DESIGN_FILE nor DESIGN.md exists), offer to create one from the generated HTML:
 
 Extract from the HTML:
 - CSS custom properties (colors, spacing, font sizes)
@@ -900,8 +934,8 @@ Extract from the HTML:
 - Shadow values
 
 Use AskUserQuestion:
-> No DESIGN.md found. I can extract the design tokens from the HTML we just built
-> and create a DESIGN.md for your project. This means future /design-shotgun and
+> No design system found. I can extract the design tokens from the HTML we just built
+> and create a design file for your project. This means future /design-shotgun and
 > /design-html runs will be style-consistent automatically.
 > A) Create DESIGN.md from these tokens
 > B) Skip — I'll handle the design system later
